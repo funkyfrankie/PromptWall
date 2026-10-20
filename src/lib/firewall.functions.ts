@@ -41,13 +41,39 @@ export interface FirewallResult {
 
 async function llm(system: string, input: { role: "user" | "assistant"; content: string }[], effort: "low" | "medium") {
   const { createOpenAI } = await import("@ai-sdk/openai");
-  const { streamText } = await import("ai");
-  const geminiKey = process.env["GEMINI_API_KEY"];
+  const { generateText, streamText } = await import("ai");
+  // Read the key defensively: trim spaces and strip quotes, a common .env paste mistake.
+  const geminiKey = process.env["GEMINI_API_KEY"]?.trim().replace(/^['"]|['"]$/g, "");
   if (geminiKey) {
     // Running locally with your own Google Gemini key (from aistudio.google.com).
     const gemini = createOpenAI({ baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/", apiKey: geminiKey });
-    const r = streamText({ model: gemini.chat(process.env["GEMINI_MODEL"] || "gemini-2.5-flash"), system, messages: input });
-    return await r.text;
+    // Try the configured model first, then well-known model names in case Google
+    // has renamed or retired one of them (a retired name makes the API answer 404).
+    const preferred = process.env["GEMINI_MODEL"]?.trim().replace(/^['"]|['"]$/g, "");
+    const models = [...new Set([preferred, "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"].filter((m): m is string => Boolean(m)))];
+    let lastErr: unknown = null;
+    for (const model of models) {
+      try {
+        // Non-streaming call: real errors (bad key, wrong model) surface clearly
+        // instead of the stream masking them as "no output generated".
+        // Hard 25 s limit and a single retry, so a slow or rate-limited Google
+        // answer shows an error instead of leaving the page on "inspecting…" forever.
+        console.log(`[firewall] asking Gemini model "${model}"…`);
+        const r = await generateText({ model: gemini.chat(model), system, messages: input, maxRetries: 1, abortSignal: AbortSignal.timeout(45_000), providerOptions: { openai: { reasoningEffort: "low" } } });
+        console.log(`[firewall] Gemini "${model}" answered.`);
+        if (!r.text) throw new Error(`empty reply (finish reason: ${r.finishReason})`);
+        return r.text;
+      } catch (e) {
+        lastErr = e;
+        const err = e as { statusCode?: number; message?: string; url?: string; responseBody?: string };
+        console.error(`[firewall] Gemini model "${model}" failed:`, err?.message ?? e, "| url:", err?.url ?? "?", "| body:", String(err?.responseBody ?? "").slice(0, 300));
+        // Only try the next model when the model name itself wasn't found; a bad key must stop here.
+        if (err?.statusCode !== 404 && !/not found|not_found/i.test(err?.message ?? "")) break;
+      }
+    }
+    const err = lastErr as { message?: string; url?: string; responseBody?: string } | null;
+    const detail = [err?.message ?? "unknown error", err?.url ? `url: ${err.url}` : "", err?.responseBody ? `body: ${String(err.responseBody).slice(0, 200)}` : ""].filter(Boolean).join(" | ");
+    throw new Error(`Gemini call failed — ${detail}`);
   }
   const key = process.env["LOVABLE_API_KEY"];
   if (!key) throw new Error("AI key is not configured — add GEMINI_API_KEY=... to a .env file in the project folder");
@@ -68,14 +94,14 @@ async function llm(system: string, input: { role: "user" | "assistant"; content:
 }
 
 export const inspectPrompt = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => MessageSchema.parse(d))
+  .validator((d: unknown) => MessageSchema.parse(d))
   .handler(async ({ data }): Promise<FirewallResult> => {
     const t0 = Date.now();
     if (data.bypass) {
       // Firewall OFF: send straight to the model, no checks. Only report whether the secret leaked.
       let reply: string;
       try { reply = await llm(data.weak ? WEAK_SYSTEM_PROMPT : PROTECTED_SYSTEM_PROMPT, data.messages, "low"); }
-      catch (e) { reply = `⚠ Model error: ${e instanceof Error ? e.message : "unknown"}`; }
+      catch (e) { console.error("[firewall] model error (bypass):", e); reply = `⚠ Model error: ${e instanceof Error ? e.message : "unknown"}`; }
       const leaked = reply.includes("ORBIT-STAFF-50") || reply.includes(CANARY);
       return { verdict: "allow", score: 0, ruleScore: 0, judge: null, judgeError: "bypassed", hits: [], mitigated: false, reply, outputBlocked: false, leaked, bypassed: true, latencyMs: Date.now() - t0 };
     }
@@ -95,6 +121,7 @@ export const inspectPrompt = createServerFn({ method: "POST" })
           reason: String(json.reason ?? ""),
         };
       } catch (e) {
+        console.error("[firewall] judge error:", e);
         judgeError = e instanceof Error ? e.message : "Judge failed";
       }
     }
@@ -112,6 +139,7 @@ export const inspectPrompt = createServerFn({ method: "POST" })
           reply = null;
         }
       } catch (e) {
+        console.error("[firewall] model error (forward):", e);
         reply = `⚠ Model error: ${e instanceof Error ? e.message : "unknown"}`;
       }
     }
