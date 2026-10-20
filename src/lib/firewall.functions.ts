@@ -42,8 +42,15 @@ export interface FirewallResult {
 async function llm(system: string, input: { role: "user" | "assistant"; content: string }[], effort: "low" | "medium") {
   const { createOpenAI } = await import("@ai-sdk/openai");
   const { streamText } = await import("ai");
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  if (geminiKey) {
+    // Running locally with your own Google Gemini key (from aistudio.google.com).
+    const gemini = createOpenAI({ baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/", apiKey: geminiKey });
+    const r = streamText({ model: gemini.chat(process.env["GEMINI_MODEL"] || "gemini-2.5-flash"), system, messages: input });
+    return await r.text;
+  }
   const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI key is not configured");
+  if (!key) throw new Error("AI key is not configured — add GEMINI_API_KEY=... to a .env file in the project folder");
   const openai = createOpenAI({
     baseURL: "https://ai.gateway.lovable.dev/v1",
     apiKey: key,
