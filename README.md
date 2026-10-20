@@ -38,7 +38,9 @@ Two supported options — the app picks whichever key it finds:
 GEMINI_API_KEY=AIzaSy...your key...
 ```
 
-Get a free key at [aistudio.google.com](https://aistudio.google.com) → **Get API key** → **Create API key**. The app calls `gemini-2.5-flash` through Google's OpenAI-compatible endpoint (`GEMINI_MODEL` overrides the model name). Never commit `.env` — `.gitignore` already excludes it.
+Get a free key at [aistudio.google.com](https://aistudio.google.com) → **Get API key** → **Create API key**. The app calls `gemini-3.8-flash` through Google's OpenAI-compatible endpoint, falling back to other known model names if Google retires one (`GEMINI_MODEL` overrides the model name). Never commit `.env` — `.gitignore` already excludes it.
+
+> **The free tier is small — read this before you start.** Google's free allowance for this model is roughly **20 requests per day**, and it resets daily at midnight California time. Every message you send Nova costs **2 requests**: one for the AI judge, one for her reply. Running the test bench with *include AI judge* ticked uses the whole day's allowance in a single run. To keep requests for the live console, untick *include AI judge* first — the pattern rules then score all 20 samples with zero requests. If the terminal prints a **429**, the allowance is spent: wait for the reset, try `GEMINI_MODEL=gemini-flash-lite-latest`, or turn on billing in Google AI Studio.
 
 **Option 2 — Lovable key:** set `LOVABLE_API_KEY` in your environment (`export LOVABLE_API_KEY="***"`).
 
@@ -87,6 +89,7 @@ Read these before treating any number below as a security claim.
 - **Multi-turn detection is a fixed window.** `scanConversation` checks the last 4 user messages individually and joined. An attack spread over 6 turns defeats it.
 - **Nothing is persisted.** Flags live in page state and vanish on reload — there is no review queue, alerting, or audit log.
 - **Cost and latency are real.** The judge adds roughly 2 s and a billed call per message. A production system would need caching, batching, or a cheaper first-pass classifier.
+- **Model names go stale.** `gemini-2.5-flash` was retired for new users partway through this project and the app started failing with a bare "no output generated". The fallback chain hides that class of breakage rather than fixing it — pin a model, or check the provider's list before you rely on it.
 - **This is a demo bot.** Nova holds one code in one system prompt. It is a stand-in for a real assistant with tools, memory, and private data, where an injection can trigger actions rather than just leak a string.
 
 ## Where to go next
