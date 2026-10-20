@@ -1,1 +1,0 @@
- it only works if you has the two Gemini-ready files replaced from the original files (src/lib/firewall.functions.ts and vite.config.ts). If you haven't replace those yet, do it 
