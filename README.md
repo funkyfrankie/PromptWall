@@ -28,24 +28,21 @@ bunx vitest run    # or: npm test      -> 22 unit tests
 
 **No API key is required for the rules.** Normalization, pattern matching, multi-turn detection, noisy-OR scoring, thresholds and the canary check are pure functions that run offline. Run `npm test`, or open the **Test bench** tab and uncheck *include AI judge*, to exercise the whole detection pipeline with zero configuration.
 
-**An LLM key is required for two things:** the AI judge and Nova's replies. Set one in your environment:
+**An LLM key is required for two things:** the AI judge and Nova's replies.
 
-```bash
 Two supported options — the app picks whichever key it finds:
 
-Option 1 — Gemini (free key from Google): create a file named .env next to package.json with one line:
+**Option 1 — Gemini (free key from Google):** create a file named `.env` next to `package.json` with one line:
 
+```bash
 GEMINI_API_KEY=AIzaSy...your key...
-
-Get a free key at aistudio.google.com → Get API key → Create API key. The app calls gemini-2.5-flash through Google's OpenAI-compatible endpoint (GEMINI_MODEL overrides the model name). Never commit .env — .gitignore already excludes it.
-
-Option 2 — Lovable key: set LOVABLE_API_KEY in your environment (export LOVABLE_API_KEY="***").
-
-Any other OpenAI-compatible endpoint also works — point llm() in src/lib/firewall.functions.ts at your own baseURL and model. The key stays server-side inside the server function; it is never sent to the browser.
-
 ```
 
-Any OpenAI-compatible endpoint works — point `llm()` in `src/lib/firewall.functions.ts` at your own `baseURL` and model. The key stays server-side inside the server function; it is never sent to the browser.
+Get a free key at [aistudio.google.com](https://aistudio.google.com) → **Get API key** → **Create API key**. The app calls `gemini-2.5-flash` through Google's OpenAI-compatible endpoint (`GEMINI_MODEL` overrides the model name). Never commit `.env` — `.gitignore` already excludes it.
+
+**Option 2 — Lovable key:** set `LOVABLE_API_KEY` in your environment (`export LOVABLE_API_KEY="***"`).
+
+Any other OpenAI-compatible endpoint also works — point `llm()` in `src/lib/firewall.functions.ts` at your own `baseURL` and model. The key stays server-side inside the server function; it is never sent to the browser.
 
 ## The three tabs
 
@@ -56,7 +53,7 @@ Any OpenAI-compatible endpoint works — point `llm()` in `src/lib/firewall.func
 ## Two toggles that show what the firewall actually buys you
 
 - **Firewall: ON / OFF** — OFF forwards your message straight to Nova with no checks. If a reply contains the secret it is outlined in red and tagged **🚨 secret leaked**.
-- **Bot: hardened / weak** — *hardened* Nova is told to keep the code secret (a recent model usually refuses obvious tricks on its own). *weak* Nova is told to help staff and never verify who is asking — closer to how most real chatbots are configured.
+- **Bot: hardened / weak** — *hardened* Nova is told to keep the code secret (a recent model usually refuses obvious tricks on her own). *weak* Nova is told to help staff and never verify who is asking — closer to how most real chatbots are configured.
 
 With the firewall OFF and the bot weak, plain social engineering works and the code leaks:
 
